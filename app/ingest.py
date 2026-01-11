@@ -2,6 +2,7 @@ import hashlib
 import unicodedata
 import logging
 from pathlib import Path
+from multiprocessing import Pool, cpu_count
 import fitz  # PyMuPDF
 
 from .db import connect
@@ -50,30 +51,25 @@ def upsert_file(con, path: Path, sha: str, modified_ns: int, size_bytes: int) ->
                       (str(path), sha, modified_ns, size_bytes))
     return cur.lastrowid
 
-def ingest_pdf_folder(folder: Path) -> dict:
-    folder = folder.resolve()
-    if not folder.exists():
-        return {"ingested": 0, "skipped": 0, "errors": 0}
+def process_single_pdf(path: Path) -> dict:
+    """Process a single PDF file. Returns dict with status."""
+    try:
+        stat = path.stat()
+        sha = sha256_file(path)
 
-    ingested = skipped = errors = 0
-    con = connect()
+        # Each process needs its own database connection
+        con = connect()
 
-    for path in folder.rglob("*"):
-        if path.suffix.lower() not in ALLOWED_EXT:
-            continue
         try:
-            stat = path.stat()
-            sha = sha256_file(path)
             with con:
                 file_id = upsert_file(con, path, sha, stat.st_mtime_ns, stat.st_size)
 
-                # if unchanged, upsert_file returned existing id but didn't clear chunks
-                # so detect if chunks already exist
+                # Check if chunks already exist (file unchanged)
                 existing = con.execute("SELECT 1 FROM chunks WHERE file_id=? LIMIT 1", (file_id,)).fetchone()
                 if existing:
-                    skipped += 1
-                    continue
+                    return {"status": "skipped", "path": str(path)}
 
+                # Extract text from PDF
                 doc = fitz.open(path)
                 chunk_count = 0
                 for page_index in range(len(doc)):
@@ -90,15 +86,56 @@ def ingest_pdf_folder(folder: Path) -> dict:
                         chunk_count += 1
                 doc.close()
 
-                if chunk_count > 0:
-                    ingested += 1
-                else:
-                    # No text extracted, still counts as ingested but it won't be searchable
-                    ingested += 1
+                return {"status": "ingested", "path": str(path), "chunks": chunk_count}
+        finally:
+            con.close()
 
-        except Exception as e:
-            logging.error(f"Error processing {path}: {e}")
-            errors += 1
+    except Exception as e:
+        logging.error(f"Error processing {path}: {e}")
+        return {"status": "error", "path": str(path), "error": str(e)}
 
-    con.close()
+
+def ingest_pdf_folder(folder: Path, use_multiprocessing: bool = True) -> dict:
+    """
+    Ingest all PDFs in a folder using multiprocessing for better performance.
+
+    Args:
+        folder: Path to folder containing PDFs
+        use_multiprocessing: If True, use multiprocessing to process PDFs in parallel
+
+    Returns:
+        Dict with ingested, skipped, and errors counts
+    """
+    folder = folder.resolve()
+    if not folder.exists():
+        return {"ingested": 0, "skipped": 0, "errors": 0}
+
+    # Collect all PDF files
+    pdf_files = [path for path in folder.rglob("*") if path.suffix.lower() in ALLOWED_EXT]
+
+    if not pdf_files:
+        logging.info(f"No PDF files found in {folder}")
+        return {"ingested": 0, "skipped": 0, "errors": 0}
+
+    logging.info(f"Found {len(pdf_files)} PDF files to process")
+
+    # Process PDFs
+    if use_multiprocessing and len(pdf_files) > 1:
+        # Use multiprocessing for parallel processing
+        num_workers = min(cpu_count(), len(pdf_files))
+        logging.info(f"Using {num_workers} worker processes")
+
+        with Pool(processes=num_workers) as pool:
+            results = pool.map(process_single_pdf, pdf_files)
+    else:
+        # Sequential processing (useful for debugging or single file)
+        logging.info("Using sequential processing")
+        results = [process_single_pdf(path) for path in pdf_files]
+
+    # Aggregate results
+    ingested = sum(1 for r in results if r["status"] == "ingested")
+    skipped = sum(1 for r in results if r["status"] == "skipped")
+    errors = sum(1 for r in results if r["status"] == "error")
+
+    logging.info(f"Ingestion complete: {ingested} ingested, {skipped} skipped, {errors} errors")
     return {"ingested": ingested, "skipped": skipped, "errors": errors}
