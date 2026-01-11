@@ -64,7 +64,7 @@ def do_search(req: SearchRequest):
         results = search(req.query, req.k)
 
         context = "\n\n---\n\n".join(
-            [f"Source: {r['path']} (p.{r['page_num']})\n{r['text']}" for r in results[:3]]
+            [f"Source: {r['path']} (p.{r['page_num']})\n{r['text']}" for r in results[:5]]
         )
 
         answer = None

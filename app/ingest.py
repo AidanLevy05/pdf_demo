@@ -18,7 +18,7 @@ def sha256_file(path: Path) -> str:
             h.update(block)
     return h.hexdigest()
 
-def chunk_text(text: str, chunk_size=900, overlap=150):
+def chunk_text(text: str, chunk_size=1500, overlap=250):
     text = unicodedata.normalize("NFKC", text)  # fixes ligatures like ﬁ -> fi
     text = " ".join(text.split())
     if not text:

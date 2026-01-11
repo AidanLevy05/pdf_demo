@@ -36,13 +36,13 @@ PDF Files (data/pdfs/)
     ↓
 Ingest (PyMuPDF extraction)
     ↓
-Chunking (900 chars, 150 overlap)
+Chunking (1500 chars, 250 overlap)
     ↓
 SQLite Database (storage/index.db)
     ↓
-FTS5 Search (BM25 ranking)
+FTS5 Search (BM25 ranking, k=10)
     ↓
-[Optional] LLM Answer Generation
+[Optional] LLM Answer Generation (top 5 results)
     ↓
 JSON Response
 ```
@@ -178,6 +178,30 @@ Content-Type: application/json
 
 This version includes several major enhancements for production readiness:
 
+### 🎯 Enhanced Retrieval Quality (Latest)
+
+**Optimized Chunk Sizes** (app/ingest.py:21)
+- Increased chunk size from 900 to 1500 characters for richer context
+- Increased overlap from 150 to 250 characters for better boundary preservation
+- Reduces fragmentation of important information across chunks
+- Improves LLM's ability to understand complete context
+
+**More Context to LLM** (app/main.py:67)
+- Increased from top 3 to top 5 search results sent to LLM
+- Provides more comprehensive information for answer generation
+- Better coverage of relevant content across multiple sources
+
+**Better Search Defaults** (static/index.html:484)
+- Increased default search results from k=5 to k=10
+- More candidate results for ranking and selection
+- Improved recall while maintaining precision
+
+**Impact:**
+- 67% larger chunks (900→1500) provide more complete paragraphs and ideas
+- 67% more overlap (150→250) ensures no information lost at boundaries
+- 67% more context to LLM (3→5 results) for better answer quality
+- 100% more search results (5→10) for improved candidate selection
+
 ### ✨ New Features
 
 **Chat-Like Web Interface** (`static/index.html`)
@@ -261,10 +285,11 @@ This version includes several major enhancements for production readiness:
 - Computes SHA256 hash for file change detection
 - Reads file in 1MB chunks for memory efficiency
 
-**`chunk_text(text, chunk_size=900, overlap=150)`** (app/ingest.py:17-27)
+**`chunk_text(text, chunk_size=1500, overlap=250)`** (app/ingest.py:21-31)
 - Normalizes Unicode (fixes ligatures like ﬁ → fi)
 - Creates overlapping chunks for better context preservation
-- Default: 900 characters per chunk with 150 character overlap
+- Default: 1500 characters per chunk with 250 character overlap (~17% overlap)
+- Larger chunks preserve complete paragraphs and ideas for better LLM comprehension
 
 **`upsert_file(con, path, sha, modified_ns, size_bytes)`** (app/ingest.py:30-45)
 - Smart file update: only re-processes if SHA256 or metadata changed
@@ -394,9 +419,10 @@ PDF ingestion uses multiprocessing to process multiple PDFs in parallel:
 The system tracks file hashes and metadata to avoid reprocessing unchanged files. Only modified PDFs are re-indexed.
 
 ### Chunking Strategy
-- **Chunk size**: 900 characters (optimal for context windows)
-- **Overlap**: 150 characters (preserves context across boundaries)
+- **Chunk size**: 1500 characters (optimal for richer context and complete ideas)
+- **Overlap**: 250 characters (preserves context across boundaries, ~17% overlap)
 - **Normalization**: Unicode NFKC fixes ligatures and special characters
+- **Rationale**: Larger chunks reduce fragmentation and improve LLM comprehension
 
 ### Search Optimization
 - Two-tier search (AND/OR) balances precision and recall
@@ -433,7 +459,10 @@ pdf_demo/
 ## Customization
 
 ### Changing Chunk Size
-Edit `app/ingest.py:17` to adjust `chunk_size` and `overlap` parameters.
+Edit `app/ingest.py:21` to adjust `chunk_size` and `overlap` parameters.
+- Current defaults: 1500 characters with 250 character overlap
+- Increase for more context per chunk (better for longer documents)
+- Decrease for faster search and smaller database (better for fragmented info)
 
 ### Using Different LLM
 Modify `app/model.py:4` to change the Ollama endpoint or model name.
