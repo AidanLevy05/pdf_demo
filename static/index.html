@@ -390,27 +390,46 @@
             if (isUser) {
                 content.textContent = text;
             } else if (data && data.answer) {
-                // Show the answer
-                const answerText = typeof data.answer === 'string'
-                    ? data.answer
-                    : data.answer.answer || JSON.stringify(data.answer);
+                // Extract answer text from the response
+                let answerText = '';
+                let quote = '';
+                let citation = '';
 
-                content.innerHTML = `<div>${answerText}</div>`;
+                // Handle different answer formats
+                if (typeof data.answer === 'string') {
+                    answerText = data.answer;
+                } else if (typeof data.answer === 'object') {
+                    answerText = data.answer.answer || '';
+                    quote = data.answer.quote || '';
+                    citation = data.answer.citation || '';
+                }
+
+                // Display the answer text
+                if (answerText) {
+                    const answerDiv = document.createElement('div');
+                    answerDiv.textContent = answerText;
+                    content.appendChild(answerDiv);
+                }
 
                 // Add quote if available
-                if (data.answer.quote && data.answer.quote.trim()) {
-                    const quote = document.createElement('div');
-                    quote.className = 'message-quote';
-                    quote.textContent = `"${data.answer.quote}"`;
-                    content.appendChild(quote);
+                if (quote && quote.trim()) {
+                    const quoteDiv = document.createElement('div');
+                    quoteDiv.className = 'message-quote';
+                    quoteDiv.textContent = `"${quote}"`;
+                    content.appendChild(quoteDiv);
                 }
 
                 // Add citation if available
-                if (data.answer.citation && data.answer.citation.trim()) {
-                    const citation = document.createElement('div');
-                    citation.className = 'message-citation';
-                    citation.textContent = `Source: ${data.answer.citation}`;
-                    content.appendChild(citation);
+                if (citation && citation.trim()) {
+                    const citationDiv = document.createElement('div');
+                    citationDiv.className = 'message-citation';
+                    citationDiv.textContent = `Source: ${citation}`;
+                    content.appendChild(citationDiv);
+                }
+
+                // Fallback if nothing to display
+                if (!answerText && !quote) {
+                    content.textContent = 'I could not find relevant information in the indexed PDFs.';
                 }
             } else {
                 content.textContent = text;
