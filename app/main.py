@@ -66,7 +66,7 @@ def do_search(req: SearchRequest):
         if req.k <= 0 or req.k > 100:
             raise HTTPException(status_code=400, detail="k must be between 1 and 100")
 
-        results = search(req.query, req.k, use_hybrid=True, use_reranking=False)  # Disable reranking for now
+        results = search(req.query, req.k, use_hybrid=False, use_reranking=False)  # Disable vector search and reranking for now
 
         context = "\n\n---\n\n".join(
             [f"Source: {r['path']} (p.{r['page_num']})\n{r['text']}" for r in results[:7]]
