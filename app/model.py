@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 class ModelClient:
-    def __init__(self, base_url="http://127.0.0.1:11434", model="qwen2.5:0.5b-instruct"):
+    def __init__(self, base_url="http://127.0.0.1:11434", model="qwen2.5:7b-instruct"):
         self.base_url = base_url
         self.model = model
 
@@ -22,7 +22,8 @@ class ModelClient:
 
         prompt = (
             "You are an expert assistant helping users understand their documents.\n"
-            "Answer the current question using ONLY the context provided below.\n"
+            "Answer the question using ONLY the information in the context below.\n"
+            "Provide a comprehensive, detailed answer with explanations.\n"
             "If there is conversation history, use it to understand context and resolve references (like 'it', 'they', 'that').\n\n"
             "Return ONLY valid JSON with exactly these keys:\n"
             "quote: an exact substring from the context that supports your answer\n"
