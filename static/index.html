@@ -389,50 +389,31 @@
 
             if (isUser) {
                 content.textContent = text;
-            } else if (data && data.answer) {
-                // Extract answer text from the response
-                let answerText = '';
-                let quote = '';
-                let citation = '';
-
-                // Handle different answer formats
-                if (typeof data.answer === 'string') {
-                    answerText = data.answer;
-                } else if (typeof data.answer === 'object') {
-                    answerText = data.answer.answer || '';
-                    quote = data.answer.quote || '';
-                    citation = data.answer.citation || '';
-                }
-
-                // Display the answer text
-                if (answerText) {
-                    const answerDiv = document.createElement('div');
-                    answerDiv.textContent = answerText;
-                    content.appendChild(answerDiv);
-                }
-
-                // Add quote if available
-                if (quote && quote.trim()) {
-                    const quoteDiv = document.createElement('div');
-                    quoteDiv.className = 'message-quote';
-                    quoteDiv.textContent = `"${quote}"`;
-                    content.appendChild(quoteDiv);
-                }
-
-                // Add citation if available
-                if (citation && citation.trim()) {
-                    const citationDiv = document.createElement('div');
-                    citationDiv.className = 'message-citation';
-                    citationDiv.textContent = `Source: ${citation}`;
-                    content.appendChild(citationDiv);
-                }
-
-                // Fallback if nothing to display
-                if (!answerText && !quote) {
-                    content.textContent = 'I could not find relevant information in the indexed PDFs.';
-                }
             } else {
+                // Just display the text - it's already been formatted
                 content.textContent = text;
+
+                // Add quote and citation if data is provided
+                if (data && data.answer && typeof data.answer === 'object') {
+                    const quote = data.answer.quote || '';
+                    const citation = data.answer.citation || '';
+
+                    // Add quote if available
+                    if (quote && quote.trim()) {
+                        const quoteDiv = document.createElement('div');
+                        quoteDiv.className = 'message-quote';
+                        quoteDiv.textContent = `"${quote}"`;
+                        content.appendChild(quoteDiv);
+                    }
+
+                    // Add citation if available
+                    if (citation && citation.trim()) {
+                        const citationDiv = document.createElement('div');
+                        citationDiv.className = 'message-citation';
+                        citationDiv.textContent = `Source: ${citation}`;
+                        content.appendChild(citationDiv);
+                    }
+                }
             }
 
             if (isUser) {
@@ -510,7 +491,20 @@
 
                 if (response.ok) {
                     if (data.answer) {
-                        addMessage('', false, data);
+                        // Log for debugging
+                        console.log('Answer data:', data.answer);
+
+                        // Extract just the answer text, not the whole object
+                        let displayText = '';
+                        if (typeof data.answer === 'string') {
+                            displayText = data.answer;
+                        } else if (data.answer.answer) {
+                            displayText = data.answer.answer;
+                        } else {
+                            displayText = JSON.stringify(data.answer);
+                        }
+
+                        addMessage(displayText, false, data);
                     } else if (data.results && data.results.length > 0) {
                         const result = data.results[0];
                         addMessage(`Found in ${result.path} (page ${result.page_num}):\n\n${result.text.substring(0, 300)}...`, false);
