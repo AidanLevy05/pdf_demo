@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# SQLite
+storage/index.db
+storage/index.db-wal
+storage/index.db-shm
+
+# OS
+.DS_Store
