@@ -22,15 +22,10 @@ model = ModelClient()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-class Message(BaseModel):
-    role: str  # "user" or "assistant"
-    content: str
-
 class SearchRequest(BaseModel):
     query: str
     k: int = 5
     use_model: bool = False
-    conversation_history: list[Message] = []
 
 
 @app.on_event("startup")
@@ -74,9 +69,7 @@ def do_search(req: SearchRequest):
 
         answer = None
         if req.use_model:
-            # Convert conversation history to dict format
-            history = [{"role": msg.role, "content": msg.content} for msg in req.conversation_history]
-            answer = model.answer(req.query, context, conversation_history=history)
+            answer = model.answer(req.query, context)
 
         return {"query": req.query, "answer": answer, "context": context, "results": results}
     except HTTPException:

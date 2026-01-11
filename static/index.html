@@ -376,9 +376,6 @@
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
 
-        // Conversation history for context
-        let conversationHistory = [];
-
         function addMessage(text, isUser, data = null) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
@@ -454,15 +451,6 @@
             messageDiv.appendChild(content);
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            // Add to conversation history (limit to last 10 messages)
-            conversationHistory.push({
-                role: isUser ? 'user' : 'assistant',
-                content: text
-            });
-            if (conversationHistory.length > 10) {
-                conversationHistory = conversationHistory.slice(-10);
-            }
         }
 
         function removeThinking() {
@@ -486,9 +474,6 @@
             showThinking();
 
             try {
-                // Get conversation history excluding the current query (which was just added)
-                const historyToSend = conversationHistory.slice(0, -1);
-
                 const response = await fetch('/search', {
                     method: 'POST',
                     headers: {
@@ -497,8 +482,7 @@
                     body: JSON.stringify({
                         query: query,
                         k: 10,
-                        use_model: true,
-                        conversation_history: historyToSend
+                        use_model: true
                     })
                 });
 
