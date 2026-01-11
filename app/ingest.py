@@ -1,9 +1,12 @@
 import hashlib
 import unicodedata
+import logging
 from pathlib import Path
 import fitz  # PyMuPDF
 
 from .db import connect
+
+logging.basicConfig(level=logging.INFO)
 
 ALLOWED_EXT = {".pdf"}
 
@@ -36,8 +39,11 @@ def upsert_file(con, path: Path, sha: str, modified_ns: int, size_bytes: int) ->
         file_id = row["id"]
         con.execute("UPDATE files SET sha256=?, modified_ns=?, size_bytes=? WHERE id=?",
                     (sha, modified_ns, size_bytes, file_id))
+        # Fix: Delete from FTS first, then from chunks
+        chunk_ids = [r[0] for r in con.execute("SELECT id FROM chunks WHERE file_id=?", (file_id,)).fetchall()]
+        for cid in chunk_ids:
+            con.execute("DELETE FROM chunks_fts WHERE rowid=?", (cid,))
         con.execute("DELETE FROM chunks WHERE file_id=?", (file_id,))
-        con.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE file_id=?)", (file_id,))
         return file_id
 
     cur = con.execute("INSERT INTO files(path, sha256, modified_ns, size_bytes) VALUES(?,?,?,?)",
@@ -90,7 +96,8 @@ def ingest_pdf_folder(folder: Path) -> dict:
                     # No text extracted, still counts as ingested but it won't be searchable
                     ingested += 1
 
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error processing {path}: {e}")
             errors += 1
 
     con.close()

@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from .db import connect
+from .db import get_db
 
 STOPWORDS = {
     "a","an","and","are","as","at","be","but","by","can","could","did","do","does",
@@ -40,26 +40,23 @@ def _run(con, fts_query: str, k: int):
     """, (fts_query, k)).fetchall()
 
 def search(query: str, k: int = 5):
-    con = connect()
+    with get_db() as con:
+        # Try strict AND first (more precise)
+        q_and = _fts_query(query, "AND")
+        rows = _run(con, q_and, k) if q_and else []
 
-    # Try strict AND first (more precise)
-    q_and = _fts_query(query, "AND")
-    rows = _run(con, q_and, k) if q_and else []
+        # If nothing, fallback to OR (broader)
+        if not rows:
+            q_or = _fts_query(query, "OR")
+            rows = _run(con, q_or, k) if q_or else []
 
-    # If nothing, fallback to OR (broader)
-    if not rows:
-        q_or = _fts_query(query, "OR")
-        rows = _run(con, q_or, k) if q_or else []
-
-    con.close()
-
-    return [
-        {
-            "path": r["path"],
-            "page_num": r["page_num"],
-            "chunk_id": r["chunk_id"],
-            "score": float(r["score"]),
-            "text": r["text"],
-        }
-        for r in rows
-    ]
+        return [
+            {
+                "path": r["path"],
+                "page_num": r["page_num"],
+                "chunk_id": r["chunk_id"],
+                "score": float(r["score"]),
+                "text": r["text"],
+            }
+            for r in rows
+        ]
