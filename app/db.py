@@ -1,5 +1,6 @@
-import sqlite3 
-from pathlib import Path 
+import sqlite3
+from pathlib import Path
+from contextlib import contextmanager
 
 DB_PATH = Path("storage/index.db")
 
@@ -38,3 +39,12 @@ def init_db():
     with con:
         con.executescript(SCHEMA)
     con.close()
+
+@contextmanager
+def get_db():
+    """Context manager for database connections"""
+    con = connect()
+    try:
+        yield con
+    finally:
+        con.close()

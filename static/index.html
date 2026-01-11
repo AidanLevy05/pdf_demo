@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Chat - Ask Questions About Your Documents</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .status-bar {
+            padding: 10px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .ingest-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .ingest-btn:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+
+        .ingest-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: #667eea;
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: #10b981;
+            color: white;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .message-citation {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+            font-style: italic;
+        }
+
+        .message-quote {
+            font-size: 12px;
+            color: #555;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f0f0f0;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .thinking {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .input-container {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+
+        #sendBtn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            min-width: 80px;
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #sendBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .welcome-message {
+            text-align: center;
+            color: #666;
+            padding: 40px 20px;
+        }
+
+        .welcome-message h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+
+        .welcome-message p {
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .welcome-tips {
+            display: inline-block;
+            text-align: left;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-top: 10px;
+        }
+
+        .welcome-tips h3 {
+            font-size: 14px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .welcome-tips ul {
+            list-style: none;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .welcome-tips li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .welcome-tips li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 PDF Chat Assistant</h1>
+            <p>Ask questions about your documents and get instant answers</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Ready</span>
+            </div>
+            <button class="ingest-btn" id="ingestBtn" onclick="ingestPDFs()">📥 Index PDFs</button>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="welcome-message">
+                <h2>👋 Welcome to PDF Chat!</h2>
+                <p>Start by indexing your PDFs, then ask any questions about them.</p>
+                <div class="welcome-tips">
+                    <h3>💡 Quick Tips:</h3>
+                    <ul>
+                        <li>Place PDF files in the <code>data/pdfs/</code> folder</li>
+                        <li>Click "Index PDFs" to process your documents</li>
+                        <li>Ask specific questions for better results</li>
+                        <li>The AI will cite sources from your PDFs</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input
+                    type="text"
+                    id="messageInput"
+                    placeholder="Ask a question about your PDFs..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button id="sendBtn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function addMessage(text, isUser, data = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = isUser ? 'Y' : 'AI';
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+
+            if (isUser) {
+                content.textContent = text;
+            } else if (data && data.answer) {
+                // Show the answer
+                const answerText = typeof data.answer === 'string'
+                    ? data.answer
+                    : data.answer.answer || JSON.stringify(data.answer);
+
+                content.innerHTML = `<div>${answerText}</div>`;
+
+                // Add quote if available
+                if (data.answer.quote && data.answer.quote.trim()) {
+                    const quote = document.createElement('div');
+                    quote.className = 'message-quote';
+                    quote.textContent = `"${data.answer.quote}"`;
+                    content.appendChild(quote);
+                }
+
+                // Add citation if available
+                if (data.answer.citation && data.answer.citation.trim()) {
+                    const citation = document.createElement('div');
+                    citation.className = 'message-citation';
+                    citation.textContent = `Source: ${data.answer.citation}`;
+                    content.appendChild(citation);
+                }
+            } else {
+                content.textContent = text;
+            }
+
+            if (isUser) {
+                messageDiv.appendChild(content);
+                messageDiv.appendChild(avatar);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(content);
+            }
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showThinking() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            messageDiv.id = 'thinking';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = 'AI';
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.innerHTML = `
+                <div class="thinking">
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                </div>
+            `;
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(content);
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function removeThinking() {
+            const thinking = document.getElementById('thinking');
+            if (thinking) thinking.remove();
+        }
+
+        async function sendMessage() {
+            const query = messageInput.value.trim();
+            if (!query) return;
+
+            // Clear welcome message on first interaction
+            const welcome = chatContainer.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+
+            addMessage(query, true);
+            messageInput.value = '';
+            sendBtn.disabled = true;
+            messageInput.disabled = true;
+
+            showThinking();
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        k: 5,
+                        use_model: true
+                    })
+                });
+
+                const data = await response.json();
+                removeThinking();
+
+                if (response.ok) {
+                    if (data.answer) {
+                        addMessage('', false, data);
+                    } else if (data.results && data.results.length > 0) {
+                        const result = data.results[0];
+                        addMessage(`Found in ${result.path} (page ${result.page_num}):\n\n${result.text.substring(0, 300)}...`, false);
+                    } else {
+                        addMessage("I couldn't find any relevant information in the indexed PDFs. Make sure you've indexed your documents first.", false);
+                    }
+                } else {
+                    addMessage(`Error: ${data.detail || 'Something went wrong'}`, false);
+                }
+            } catch (error) {
+                removeThinking();
+                addMessage(`Error: ${error.message}. Make sure the server is running and PDFs are indexed.`, false);
+            }
+
+            sendBtn.disabled = false;
+            messageInput.disabled = false;
+            messageInput.focus();
+        }
+
+        async function ingestPDFs() {
+            const btn = document.getElementById('ingestBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Indexing...';
+
+            try {
+                const response = await fetch('/ingest', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const stats = data.stats;
+                    addMessage(`✅ Indexing complete!\n\nIngested: ${stats.ingested} files\nSkipped: ${stats.skipped} files\nErrors: ${stats.errors}`, false);
+                } else {
+                    addMessage(`Error during indexing: ${data.detail || 'Unknown error'}`, false);
+                }
+            } catch (error) {
+                addMessage(`Error: ${error.message}`, false);
+            }
+
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>

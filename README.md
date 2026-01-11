@@ -8,12 +8,15 @@ This application provides a complete solution for ingesting PDF documents, creat
 
 ### Key Features
 
+- **🎨 Chat-Like Web Interface**: Beautiful, modern UI for conversational interaction with your PDFs
 - **PDF Ingestion**: Automatically extracts and indexes text from PDF documents
 - **Full-Text Search**: SQLite FTS5 with BM25 ranking for efficient search
 - **Smart Chunking**: Overlapping text chunks for better context preservation
 - **Incremental Updates**: Only processes changed files (SHA256 + timestamp tracking)
-- **LLM Integration**: Optional Ollama integration for question answering
+- **LLM Integration**: Optional Ollama integration for question answering with citations
 - **REST API**: Simple FastAPI endpoints for all operations
+- **Error Handling**: Comprehensive error handling with helpful error messages
+- **Database Management**: Efficient connection pooling with context managers
 
 ## Architecture
 
@@ -69,13 +72,44 @@ ollama pull qwen2.5:0.5b-instruct
 
 ## Usage
 
-### Starting the Server
+### Quick Start (Recommended)
 
-```bash
-uvicorn app.main:app --reload
-```
+1. **Install dependencies:**
+   ```bash
+   pip install -r req.txt
+   ```
 
-The API will be available at `http://localhost:8000`
+2. **Start the server:**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+3. **Open the Chat UI:**
+
+   Navigate to `http://localhost:8000` in your browser
+
+4. **Index your PDFs:**
+   - Place PDF files in the `data/pdfs/` folder
+   - Click the "📥 Index PDFs" button in the UI
+
+5. **Start asking questions:**
+   - Type your question in the chat interface
+   - Get instant answers with citations from your documents!
+
+### Chat UI Features
+
+The web interface at `http://localhost:8000` provides:
+
+- **💬 Conversational Interface**: Chat naturally with your documents
+- **🤖 AI-Powered Answers**: Automatic question answering with source citations
+- **📝 Quote Highlighting**: See exact quotes from your PDFs
+- **⚡ Real-Time Feedback**: Loading indicators and status updates
+- **🎨 Beautiful Design**: Modern, responsive gradient UI
+- **📥 One-Click Indexing**: Index PDFs directly from the browser
+
+### Alternative: Using the API Directly
+
+The REST API is also available at `http://localhost:8000`
 
 ### API Endpoints
 
@@ -140,6 +174,59 @@ Content-Type: application/json
 }
 ```
 
+## Recent Improvements
+
+This version includes several major enhancements for production readiness:
+
+### ✨ New Features
+
+**Chat-Like Web Interface** (`static/index.html`)
+- Modern, responsive chat UI with gradient design
+- Real-time PDF indexing from the browser
+- AI-powered answers with citations and quotes
+- Smooth animations and loading states
+- Mobile-friendly responsive design
+
+### 🛡️ Error Handling & Reliability
+
+**API Error Handling** (app/main.py:46-79)
+- Comprehensive try/catch blocks on all endpoints
+- Input validation (empty queries, k limits 1-100)
+- Proper HTTP status codes (400 for bad requests, 500 for errors)
+- Detailed error logging for debugging
+
+**Model Error Handling** (app/model.py:29-67)
+- Network failure recovery with helpful error messages
+- JSON parsing with fallback to raw response
+- Connection timeout handling
+- Graceful degradation when LLM is unavailable
+
+**Ingestion Error Logging** (app/ingest.py:99-101)
+- Detailed error messages showing which file failed
+- Continues processing despite individual file errors
+- Error statistics in response
+
+### 🔧 Technical Improvements
+
+**Database Connection Management** (app/db.py:42-50)
+- Context manager for automatic connection cleanup
+- Prevents connection leaks
+- More efficient resource usage
+- Used in search.py:43 with `with get_db()`
+
+**Bug Fixes**
+- Fixed FTS virtual table deletion order bug (ingest.py:39-43)
+  - Now deletes from FTS before chunks (previously would fail)
+- Proper cleanup of old chunks when re-indexing files
+
+### 📊 Enhanced User Experience
+
+- Status indicators showing system health
+- Progress feedback during operations
+- Welcome screen with quick tips
+- Clear error messages for common issues
+- Source citations in answers
+
 ## Code Documentation
 
 ### db.py - Database Layer
@@ -154,8 +241,9 @@ Content-Type: application/json
 **Key Functions:**
 - `connect()`: Creates database connection with row factory
 - `init_db()`: Initializes schema with WAL mode for better concurrency
+- `get_db()`: Context manager for automatic connection cleanup (app/db.py:42-50)
 
-**Location:** `app/db.py:4-40`
+**Location:** `app/db.py`
 
 ### ingest.py - PDF Processing
 
@@ -242,9 +330,11 @@ Content-Type: application/json
 - Expects PDFs in `data/pdfs/` directory
 
 **Endpoints:**
+- `/`: Serves the chat UI interface
 - `/health`: Simple health check
-- `/ingest`: Triggers PDF ingestion process
-- `/search`: Executes search with optional LLM answer
+- `/ingest`: Triggers PDF ingestion process with error handling
+- `/search`: Executes search with optional LLM answer and input validation
+- `/static/*`: Static files (CSS, JS, images)
 
 **SearchRequest Model:**
 - `query` (str): Search terms
@@ -304,16 +394,18 @@ The system tracks file hashes and metadata to avoid reprocessing unchanged files
 ```
 pdf_demo/
 ├── app/
-│   ├── main.py       # FastAPI application
-│   ├── db.py         # Database layer
-│   ├── ingest.py     # PDF processing
-│   ├── search.py     # Search engine
-│   ├── model.py      # LLM client
-│   └── config.py     # Configuration
+│   ├── main.py       # FastAPI application & API endpoints
+│   ├── db.py         # Database layer with connection management
+│   ├── ingest.py     # PDF processing & text extraction
+│   ├── search.py     # Full-text search engine
+│   ├── model.py      # LLM client for Q&A
+│   └── config.py     # Configuration (placeholder)
+├── static/
+│   └── index.html    # Chat UI web interface
 ├── data/
-│   └── pdfs/         # PDF files to ingest
+│   └── pdfs/         # PDF files to ingest (place your PDFs here)
 ├── storage/
-│   └── index.db      # SQLite database (created on first run)
+│   └── index.db      # SQLite database (auto-created on first run)
 ├── req.txt           # Python dependencies
 └── README.md         # This file
 ```
