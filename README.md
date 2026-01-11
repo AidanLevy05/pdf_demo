@@ -1,6 +1,6 @@
 # PDF Demo Indexer
 
-A FastAPI-based PDF indexing and semantic search system with optional LLM-powered question answering.
+A FastAPI-based PDF indexing and semantic search system with hybrid search (BM25 + vector embeddings), reranking, conversation history, and optional LLM-powered question answering.
 
 ## Overview
 
@@ -9,9 +9,12 @@ This application provides a complete solution for ingesting PDF documents, creat
 ### Key Features
 
 - **🎨 Chat-Like Web Interface**: Beautiful, modern UI for conversational interaction with your PDFs
-- **PDF Ingestion**: Automatically extracts and indexes text from PDF documents
-- **Full-Text Search**: SQLite FTS5 with BM25 ranking for efficient search
-- **Smart Chunking**: Overlapping text chunks for better context preservation
+- **🔍 Hybrid Search**: Combines BM25 keyword matching with vector embeddings for semantic understanding
+- **⚡ Intelligent Reranking**: Cross-encoder model reranks results for maximum relevance
+- **💬 Conversation History**: Multi-turn conversations with context awareness
+- **PDF Ingestion**: Automatically extracts and indexes text from PDF documents with parallel processing
+- **Vector Embeddings**: Semantic search using sentence-transformers (all-MiniLM-L6-v2)
+- **Smart Chunking**: Overlapping text chunks (1500 chars, 250 overlap) for better context preservation
 - **Incremental Updates**: Only processes changed files (SHA256 + timestamp tracking)
 - **LLM Integration**: Optional Ollama integration for question answering with citations
 - **REST API**: Simple FastAPI endpoints for all operations
@@ -24,23 +27,34 @@ This application provides a complete solution for ingesting PDF documents, creat
 
 1. **main.py** - FastAPI application and API endpoints
 2. **db.py** - SQLite database connection and schema management
-3. **ingest.py** - PDF processing and text extraction
-4. **search.py** - Full-text search with BM25 ranking
-5. **model.py** - Ollama LLM client for question answering
-6. **config.py** - Configuration (currently empty, placeholder)
+3. **ingest.py** - PDF processing, text extraction, and embedding generation
+4. **search.py** - Hybrid search (BM25 + vector similarity) with reranking
+5. **embeddings.py** - Vector embeddings and cross-encoder reranking
+6. **model.py** - Ollama LLM client for question answering with conversation history
+7. **config.py** - Configuration (currently empty, placeholder)
 
 ### Data Flow
 
 ```
 PDF Files (data/pdfs/)
     ↓
-Ingest (PyMuPDF extraction)
+Ingest (PyMuPDF extraction + Parallel Processing)
     ↓
 Chunking (1500 chars, 250 overlap)
     ↓
-SQLite Database (storage/index.db)
+Vector Embeddings (all-MiniLM-L6-v2, 384 dim)
     ↓
-FTS5 Search (BM25 ranking, k=10)
+SQLite Database (storage/index.db)
+    ├── FTS5 Index (BM25 ranking)
+    └── Vector Embeddings (BLOB storage)
+    ↓
+User Query
+    ↓
+Hybrid Search (BM25 + Vector Similarity)
+    ↓
+Reranking (Cross-Encoder)
+    ↓
+Top Results (context-aware with conversation history)
     ↓
 [Optional] LLM Answer Generation (top 5 results)
     ↓
@@ -61,6 +75,13 @@ Dependencies:
 - `pydantic` - Data validation
 - `python-multipart` - File upload support
 - `pymupdf` - PDF text extraction
+- `sentence-transformers` - Vector embeddings and reranking models
+- `numpy` - Vector operations
+- `torch` - PyTorch backend for transformer models
+
+**Note:** First run will download models:
+- `all-MiniLM-L6-v2` (~90MB) - Embedding model
+- `cross-encoder/ms-marco-MiniLM-L-6-v2` (~90MB) - Reranking model
 
 ### Optional: Ollama Setup
 
@@ -178,7 +199,35 @@ Content-Type: application/json
 
 This version includes several major enhancements for production readiness:
 
-### 🎯 Enhanced Retrieval Quality (Latest)
+### 🚀 Advanced Search & AI Features (Latest)
+
+**Hybrid Search with Vector Embeddings** (app/search.py:44-164, app/embeddings.py)
+- Combines traditional BM25 keyword search with semantic vector similarity
+- Uses `all-MiniLM-L6-v2` model (384-dimensional embeddings) for semantic understanding
+- Finds conceptually related content even without exact keyword matches
+- Weighted combination: 50% BM25 + 50% vector similarity for balanced results
+- Example: "airplane safety" now matches "aircraft operational procedures"
+
+**Intelligent Reranking** (app/embeddings.py:49-73, app/search.py:157-160)
+- Cross-encoder model (`ms-marco-MiniLM-L-6-v2`) reranks candidates
+- Computes query-document relevance scores for final ranking
+- Processes top candidates (k×3) for comprehensive reranking
+- Significantly improves answer quality by surfacing most relevant chunks first
+
+**Conversation History & Context Awareness** (app/main.py:25-33, app/model.py:12-40, static/index.html:379-465)
+- Maintains last 10 messages for multi-turn conversations
+- LLM uses conversation history to resolve references ("it", "they", "that")
+- Frontend tracks conversation state and sends with each query
+- Backend includes last 6 messages in LLM prompt for context
+- Enables follow-up questions: "What is X?" → "Tell me more about it"
+
+**Impact:**
+- **Semantic understanding**: Find results by meaning, not just keywords
+- **Higher precision**: Reranking ensures most relevant results appear first
+- **Natural conversations**: Ask follow-up questions without repeating context
+- **Better UX**: Chat feels more like talking to an expert, not a search engine
+
+### 🎯 Enhanced Retrieval Quality
 
 **Optimized Chunk Sizes** (app/ingest.py:21)
 - Increased chunk size from 900 to 1500 characters for richer context
@@ -378,8 +427,10 @@ This version includes several major enhancements for production readiness:
 - `query` (str): Search terms
 - `k` (int, default=5): Result count
 - `use_model` (bool, default=false): Enable LLM answers
+- `conversation_history` (list, default=[]): Previous messages for context-aware conversations
+  - Each message: `{"role": "user"|"assistant", "content": "message text"}`
 
-The search endpoint constructs context from top 3 results and optionally sends to LLM for answer generation.
+The search endpoint uses hybrid search (BM25 + vectors) with reranking, constructs context from top 5 results, and optionally sends to LLM with conversation history for context-aware answer generation.
 
 ## Database Schema
 
@@ -400,6 +451,7 @@ The search endpoint constructs context from top 3 results and optionally sends t
 | page_num | INTEGER | Page number (1-indexed) |
 | chunk_index | INTEGER | Chunk number within page |
 | text | TEXT | Chunk content |
+| embedding | BLOB | Vector embedding (384-dim, serialized numpy array) |
 
 ### chunks_fts (FTS5 Virtual Table)
 - Full-text search index on `text` column
@@ -414,6 +466,13 @@ PDF ingestion uses multiprocessing to process multiple PDFs in parallel:
 - Each PDF is processed independently in its own worker process
 - Typical speedup: 2-4x faster on multi-core systems
 - Falls back to sequential processing for single files or debugging
+- **Note**: Embedding generation happens per-chunk during ingestion (~10-20ms per chunk on CPU)
+
+### Hybrid Search Performance
+- **BM25 Search**: Very fast (< 10ms) using SQLite FTS5 index
+- **Vector Search**: Computes similarity against all stored embeddings (~50-100ms for 1000 chunks)
+- **Reranking**: Cross-encoder processes top candidates (~100-200ms for 30 candidates)
+- **Total**: Typically 200-400ms end-to-end for hybrid search with reranking
 
 ### Incremental Updates
 The system tracks file hashes and metadata to avoid reprocessing unchanged files. Only modified PDFs are re-indexed.

@@ -9,20 +9,33 @@ class ModelClient:
         self.base_url = base_url
         self.model = model
 
-    def answer(self, question: str, context: str) -> dict:
+    def answer(self, question: str, context: str, conversation_history: list = None) -> dict:
+        # Build conversation history section if provided
+        history_text = ""
+        if conversation_history:
+            history_text = "CONVERSATION HISTORY:\n"
+            for msg in conversation_history[-6:]:  # Last 6 messages (3 turns)
+                role = msg["role"].upper()
+                content = msg["content"]
+                history_text += f"{role}: {content}\n"
+            history_text += "\n"
+
         prompt = (
-            "You must answer using ONLY the context.\n"
+            "You are an expert assistant helping users understand their documents.\n"
+            "Answer the current question using ONLY the context provided below.\n"
+            "If there is conversation history, use it to understand context and resolve references (like 'it', 'they', 'that').\n\n"
             "Return ONLY valid JSON with exactly these keys:\n"
-            "quote: an exact substring copied from the context that answers the question\n"
-            "answer: a short answer based only on the quote\n"
-            "citation: in the form \"sample.pdf p.1\" (use the Source line)\n"
-            "\n"
+            "quote: an exact substring from the context that supports your answer\n"
+            "answer: a detailed, comprehensive answer (2-4 sentences) based on the context\n"
+            "citation: source file and page number in format \"filename.pdf p.X\"\n\n"
             "Rules:\n"
-            "- The quote MUST be copied verbatim from the context.\n"
-            "- If you cannot find an exact quote, return ONLY: {\"quote\":\"\",\"answer\":\"I don't know based on the provided PDFs.\",\"citation\":\"\"}\n"
-            "- Do not add extra keys. Do not add markdown.\n\n"
+            "- Be thorough and explain the answer clearly\n"
+            "- The quote should be verbatim from the context\n"
+            "- If you cannot answer, return: {\"quote\":\"\",\"answer\":\"I cannot find this information in the provided documents.\",\"citation\":\"\"}\n"
+            "- Do not add extra keys or markdown\n\n"
+            f"{history_text}"
             f"CONTEXT:\n{context}\n\n"
-            f"QUESTION:\n{question}\n"
+            f"CURRENT QUESTION:\n{question}\n\n"
             "JSON:"
         )
 
