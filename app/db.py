@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   page_num INTEGER NOT NULL,
   chunk_index INTEGER NOT NULL,
   text TEXT NOT NULL,
+  embedding BLOB,
   FOREIGN KEY(file_id) REFERENCES files(id)
 );
 

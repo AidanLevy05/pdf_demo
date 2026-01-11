@@ -6,6 +6,7 @@ from multiprocessing import Pool, cpu_count
 import fitz  # PyMuPDF
 
 from .db import connect
+from .embeddings import create_embedding, serialize_embedding
 
 logging.basicConfig(level=logging.INFO)
 
@@ -77,9 +78,13 @@ def process_single_pdf(path: Path) -> dict:
                     text = page.get_text("text")
                     chunks = chunk_text(text)
                     for ci, ch in enumerate(chunks):
+                        # Generate embedding for the chunk
+                        embedding = create_embedding(ch)
+                        embedding_blob = serialize_embedding(embedding)
+
                         cur = con.execute(
-                            "INSERT INTO chunks(file_id, page_num, chunk_index, text) VALUES(?,?,?,?)",
-                            (file_id, page_index + 1, ci, ch),
+                            "INSERT INTO chunks(file_id, page_num, chunk_index, text, embedding) VALUES(?,?,?,?,?)",
+                            (file_id, page_index + 1, ci, ch, embedding_blob),
                         )
                         chunk_id = cur.lastrowid
                         con.execute("INSERT INTO chunks_fts(rowid, text) VALUES(?,?)", (chunk_id, ch))
