@@ -31,8 +31,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, content='chunks',
 
 def connect():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=30.0)  # 30 second timeout for locks
     con.row_factory = sqlite3.Row
+    # Enable WAL mode and set busy timeout for better concurrency
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=30000")  # 30 seconds in milliseconds
     return con 
 
 def init_db():
